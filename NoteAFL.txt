@@ -1,0 +1,135 @@
+DevC++:C:\Users\macbook\Documents\Vuln.exe
+VS 2019:C:\Users\macbook\source\repos\Vuln\Debug\Vuln.exe
+
+DynamoRIO.8.0.1(32 bit):C:\Users\macbook\Documents\DynamoRIO-Windows-8.0.0-1\bin32
+DynamoRIO.7.0.1(32 bit):C:\Users\macbook\Documents\DynamoRIO-Windows-7.1.0-1\DynamoRIO-Windows-7.1.0-1\bin32\
+Vuln: C:\Users\macbook\source\repos\Vuln\Debug\Vuln.exe
+DevC: C:\Users\macbook\Documents\Vuln.exe
+DynamoRIO.8.0.1(32 bit)
+Path:afl-fuzz.exe -i input -o output -D C:\Users\macbook\Documents\DynamoRIO-Windows-8.0.0-1\bin32\drrun.exe -t 200 --
+ -coverage_module C:\Users\macbook\source\repos\Vuln\Debug\Vuln.exe -fuzz_iterations 5000
+ -target_module C:\Users\macbook\source\repos\Vuln\Debug\Vuln.exe -nargs 1 -- C:\Users\macbook\source\repos\Vuln\Debug\Vuln.exe @@
+
+Chú thích(10/7/2020)
+Sử dụng  DynamoRIO 8.0.1 với file.exe được build bởi visual -> ra lỗi "Client library target an incompatible API version and should be re-complied"
+và sau đó nhận được [-] PROGRAM ABORT : CreateProcess failed, GLE=2.
+         Location : create_target_process(), c:\work\winafl\source\afl-fuzz.c:2330
+
+Fix(Lí thuyết): If you get this error means your drrun.exe and winafl.dll is not compatible and you need to compile winafl again.
+
+1.git clone winafl to your system from here:
+https://github.com/googleprojectzero/winafl
+2.open visual studio command prompt(you need either vs2015 or vs2017 installed on your system for this)
+3.go to winafl dir and run following commands for 32 bit build:
+mkdir build32
+cd build32
+cmake .. -DDynamoRIO_DIR=..\path\to\DynamoRIO\cmake
+cmake –build . –config Release
+4.for 64 bit build run following commands:
+mkdir build64
+cd build64
+cmake -G”Visual Studio 10 Win64″ .. -DDynamoRIO_DIR=..\path\to\DynamoRIO\cmake
+cmake –build . –config Release
+5.you are done.
+
+Đã fix được sinh ra lỗi mới :)
+
+[-] PROGRAM ABORT : CreateProcess failed -> Lỗi đường dẫn tới file thực thi(*.exe)
+
+11/7/2020
+DynamoRIO.7.0.1(32 bit)
+C:\Users\macbook\Documents\FuzzWin\winafl\build32\bin\Release>C:\Users\macbook\Documents\DynamoRIO-Windows-7.1.0-1\DynamoRIO-Windows-7.1.0-1\bin32\drrun.exe -c winafl.dll  
+-debug -target_module C:\Users\macbook\Documents\Vuln.exe -target_offset 0x0401570 -fuzz_iterations 10 -nargs 2 -- C:\Users\macbook\Documents\Vuln.exe input
+Trong quá trình làm đối với 32 bit -> sẽ nhận được lỗi phiên bản [chuyển qua 64]
+
+Đối với 64 bit  -> sẽ không trả về bất cứ điều gì 
+13/7/2020
+Chuyển đổi path DynamoRIO và chung folder với winafl
+C:\Users\macbook\Documents\FuzzWin\DynamoRIO-Windows-8.0.0-1\
+Step 1:build fuzz.cpp
+
+add thư viện stdafx.h targetver vào C:\Users\macbook\source\repos\WinFuzzing\WinFuzzing
+add msxml6.dll vào C:\Users\macbook\source\repos\WinFuzzing\WinFuzzing\x64\Debug
+Build thành công
+Step 2: Dump file.exe
+Step 3: Run file.xml
+Step 4: Sử dụng dynamoRIO(sử dụng bản 7.0.0-1)
+C:\Users\macbook\source\repos\WinFuzzing\x64\Debug\WinFuzzing.exe
+C:\Users\macbook\source\repos\WinFuzzing\x64\Debug\nn-valid.xml
+CMD:C:\Users\macbook\Documents\DynamoRIO-Windows-7.1.0-1\DynamoRIO-Windows-7.1.0-1\bin64\drrun.exe -c winafl.dll -debug -coverage_module msxml6.dll -target_module WinFuzzing.exe -target_method main 
+-fuzz_iterations 10 -nargs 2 -- C:\Users\macbook\source\repos\WinFuzzing\x64\Debug\WinFuzzing.exe C:\Users\macbook\source\repos\WinFuzzing\x64\Debug\nn-valid.xml
+Nhận được file log thành công.
+
+step 5: IDA
+C:\Users\macbook\Documents\FuzzWin\winafl\build32\bin\Release> 
+C:\Users\macbook\source\repos\WinFuzzing\x64\Debug> : Tệp log để bỏ vào IDA.
+C:\Users\macbook\Documents\DynamoRIO-Windows-7.1.0-1\DynamoRIO-Windows-7.1.0-1\bin32\ -t drcov -- xmlvalidate.exe nn-valid.xml
+=> Hiển thị thành công nhưng có bản thông báo lỗi
+"
+Error: BAD_COVERAGE_MAPPING
+
+One or more of the loaded coverage files appears to be badly mapped.
+
+ Possible reasons:
+ - You selected the wrong binary/module to load coverage from.
+ - Your coverage file/data is for a different version of the
+   binary that does not match what the disassembler has open.
+ - You recorded self-modifying code or something with very
+    abnormal control flow (obfuscated code, malware, packers).
+ - The coverage data might be corrupt or malformed.
+
+This means that any coverage displayed by Lighthouse is PROBABLY
+WRONG and is not be trusted because the coverage data does not
+appear to match the disassembled binary.
+"
+Script
+Cài urllib3,beautifulSoup(bs4)
+
+15/7/2020
+extension hậu tố
+magic_header là định dạng ở đầu của file được biểu diễn bằng mã hex[xml = 3c 3f 78 6d 6c 20]
+python find_sample.py xml 3C3F786D6C2076657273696F6E3D . 0 100 => không nhận dạng được
+python find_sample.py xml "<?xml" . 0 100 => Nhận được 6 case 
+
+sử dụng winafl-cmin.py
+
+python winafl-cmin.py --working-dir C:\Users\macbook\Documents\FuzzWin\winafl\bin64\ -D C:\Users\macbook\Documents\DynamoRIO-Windows-7.1.0-1\DynamoRIO-Windows-7.1.0-1\bin64\ -t 100000 -i C:\Users\macbook\Documents\xml_fuzz -o C:\Users\macbook\Documents\minset_xml -coverage_module msxml6.dll -target_module WinFuzzing.exe -target_method fuzzme -nargs 1 -- C:\Users\macbook\source\repos\WinFuzzing\x64\Debug\WinFuzzing.exe @@
+
+[Resume]
+=====================================================
+
+24/7/2020 (Làm lại vấn đề xây dựng chương trình trên 64bit)
+The Harness
+-Build Harness
+-|C:\Users\macbook\Documents\nn-valid.xml
+-Code Coverage
+-| C:\Users\macbook\source\repos\Fuzz\x64\Debug\Fuzz.exe
+-|DynamoRIO: C:\Users\macbook\Documents\DynamoRIO-Windows-8.0.18460\bin64
+
+>C:\Users\macbook\Documents\DynamoRIO-Windows-8.0.18460\bin64\drrun.exe -c winafl.dll -debug -coverage_module msxml6.dll
+-target_module Fuzz.exe -target_method main -fuzz_iterations 10 -nargs 2
+-- C:\Users\macbook\source\repos\Fuzz\x64\Debug\Fuzz.exe  C:\Users\macbook\Documents\nn-valid.xml
+=> afl.Fuzz.exe.14068.0000.proc.log
+-Lighthouse - Code Coverage Explorer for IDA Pro
+
+-| Cài file plusin của lighthouse vào IDA Pro -> Code coverage (file) and (batch)
+-Case minimisation
+python find_sample.py xml "<!DOC" . 0 100 => Thu được 36 case
+
+2 hướng 
+Kiểm tra option check
+kiểm tra file import
+
+
+================
+
+C:\Users\macbook\Documents\DynamoRIO-Windows-8.0.18460\bin64\drrun.exe -c winafl.dll -debug -target_module FuzzTest.exe -target_offset 0x46450-fuzz_iterations 10 -nargs 2
+-- C:\Users\macbook\source\repos\FuzzTest\x64\Debug\FuzzTest.exe input.bmp
+
+================
+afl-fuzz.exe -i C:\Users\macbook\Documents\xml_file_read -o C:\Users\macbook\Documents\ouput 
+-D C:\Users\macbook\Documents\DynamoRIO-Windows-8.0.18460\bin64 -t 20000+ -- -coverage_module FuzzTest.exe -fuzz_iterations 5000 -target_module FuzzTest.exe
+-target_offset 0x46450 -nargs 2 -- C:\Users\macbook\source\repos\FuzzTest\x64\Debug\FuzzTest.exe @@
+================
+
+=> Success
